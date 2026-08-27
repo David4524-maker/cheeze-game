@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CHEEZE GAME - Lite Edition</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #000; font-family: sans-serif; color: #fff;
+    }
+    #game-container { position: relative; width: 100vw; height: 100vh; }
+    canvas { display: block; width: 100%; height: 100%; }
+    
+    .ui-layer {
+      position: absolute; top: 12px; left: 16px; right: 16px;
+      display: flex; justify-content: space-between; align-items: center;
+      font-weight: bold; font-size: 1rem; pointer-events: none; z-index: 5;
+    }
+    .status-box {
+      background: rgba(0, 0, 0, 0.7); padding: 6px 14px;
+      border-radius: 12px; border: 1px solid rgba(255,255,255,0.2);
+    }
+    .p1-color { color: #FFE600; }
+    .p2-color { color: #00E5FF; }
+
+    .modal-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.85); display: none;
+      flex-direction: column; justify-content: center; align-items: center;
+      gap: 12px; z-index: 10; padding: 20px; text-align: center;
+    }
+    .btn {
+      background: #FFE600; color: #000; border: none; padding: 12px 28px;
+      font-size: 1.1rem; font-weight: bold; border-radius: 8px; cursor: pointer;
+      min-width: 220px;
+    }
+    .btn:hover { background: #ffea38; }
+    .btn-secondary { background: #333; color: #fff; border: 1px solid #555; }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div class="ui-layer">
+      <div class="status-box"><span class="p1-color" id="p1-lives">🟡 J1 Vidas: 3</span></div>
+      <div class="status-box"><span id="level-display">Nivel: 1 / 30</span></div>
+      <div class="status-box" id="p2-status-box" style="display:none;"><span class="p2-color" id="p2-lives"> J2 Vidas: 3</span></div>
+    </div>
+
+    <!-- Menú -->
+    <div class="modal-screen" id="startMenuScreen" style="display: flex;">
+      <h1 style="color: #FFE600; font-size: 3rem;">🧀 CHEEZE GAME (LITE)</h1>
+      <p style="color: #aaa;">Versión optimizada para bajo consumo de RAM</p>
+      <button class="btn" onclick="startGame(1)">▶ 1 JUGADOR</button>
+      <button class="btn" onclick="startGame(2)" style="background: #00E5FF;"> 2 JUGADORES</button>
+    </div>
+
+    <!-- Game Over -->
+    <div class="modal-screen" id="gameOverScreen">
+      <h1 style="color: #ff4444; font-size: 3rem;">GAME OVER</h1>
+      <button class="btn" onclick="restartGame()">Reintentar</button>
+    </div>
+
+    <!-- Victoria -->
+    <div class="modal-screen" id="winScreen">
+      <h1 style="color: #FFE600; font-size: 3rem;">¡VICTORIA! 🧀</h1>
+      <button class="btn" onclick="restartGame()">Jugar de Nuevo</button>
+    </div>
+
+    <!-- Pausa -->
+    <div class="modal-screen" id="pauseScreen">
+      <h1 style="color: #FFE600; font-size: 3rem;">PAUSA</h1>
+      <button class="btn" onclick="togglePause()">Continuar</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { alpha: false }); // Desactiva alpha para ganar rendimiento
+
+    const p1LivesEl = document.getElementById('p1-lives');
+    const p2LivesEl = document.getElementById('p2-lives');
+    const levelDisplayEl = document.getElementById('level-display');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (!inStartMenu) buildLevel(currentLevel);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    const TOTAL_LEVELS = 30;
+    let currentLevel = 1;
+    let gameMode = 1;
+    let inStartMenu = true;
+    let gameOver = false;
+    let gameWon = false;
+    let isPaused = false;
+
+    // AUDIO ULTRA LIGERO
+    let audioCtx = null;
+    function playBeep(freq, duration) {
+      if (!audioCtx) return;
+      try {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+      } catch(e) {}
+    }
+
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function startGame(mode) {
+      gameMode = mode;
+      initAudio();
+      inStartMenu = false;
+      document.getElementById('startMenuScreen').style.display = 'none';
+      document.getElementById('p2-status-box').style.display = gameMode === 2 ? 'block' : 'none';
+      restartGame();
+    }
+
+    function togglePause() {
+      if (gameOver || gameWon || inStartMenu) return;
+      isPaused = !isPaused;
+      document.getElementById('pauseScreen').style.display = isPaused ? 'flex' : 'none';
+    }
+
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      initAudio();
+      if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
+      if (isPaused || inStartMenu) return;
+      keys[e.code] = true;
+      if (e.code === 'KeyR') resetPlayerPositions();
+    });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // OBJETOS REUTILIZABLES (Cero Garbage Collector)
+    const p1 = { id: 1, x: 40, y: 400, radius: 16, vx: 0, vy: 0, speed: 6, jumpPower: -13, gravity: 0.46, grounded: false, lives: 3, color: "#FFE600", active: true };
+    const p2 = { id: 2, x: 90, y: 400, radius: 16, vx: 0, vy: 0, speed: 6, jumpPower: -13, gravity: 0.46, grounded: false, lives: 3, color: "#00E5FF", active: true };
+    
+    let platforms = [];
+    let enemies = [];
+    const goal = { x: 0, y: 0, size: 28 };
+    let bgStyle = "#70c5ce"; // Color plano en lugar de gradientes complejos
+
+    function buildLevel(lvl) {
+      platforms = [];
+      enemies = [];
+      const w = canvas.width;
+      const h = canvas.height;
+
+      const startW = Math.max(140, w * 0.12);
+      platforms.push({ x: 0, y: h - 100, w: startW, h: 100 });
+
+      const numPlatforms = 5 + Math.floor(lvl * 0.25);
+      const targetEndX = w - Math.max(140, w * 0.12);
+      const stepX = (targetEndX - startW) / numPlatforms;
+      let currY = h - 100;
+
+      for (let i = 0; i < numPlatforms; i++) {
+        const platW = Math.max(100, stepX * 0.7);
+        const posX = startW + stepX * i + (stepX - platW) / 2;
+        currY = Math.max(h * 0.35, Math.min(h - 100, currY + Math.sin(i * 1.5 + lvl) * 60));
+
+        platforms.push({ x: posX, y: currY, w: platW, h: 24 });
+
+        if (i > 0 && Math.random() < 0.4) {
+          enemies.push({
+            x: posX + platW / 2, y: currY - 12, radius: 12,
+            minX: posX + 14, maxX: posX + platW - 14, vx: 1.5 * (i % 2 === 0 ? 1 : -1)
+          });
+        }
+      }
+
+      const endPlatW = Math.max(140, w * 0.12);
+      platforms.push({ x: w - endPlatW, y: currY, w: endPlatW, h: h - currY });
+
+      const last = platforms[platforms.length - 1];
+      goal.x = last.x + last.w / 2 - 14;
+      goal.y = last.y - 35;
+
+      // Colores simples por etapas para ahorrar renderizado GPU
+      if (lvl < 10) bgStyle = "#70c5ce";
+      else if (lvl < 20) bgStyle = "#2c1654";
+      else bgStyle = "#050b14";
+
+      resetPlayerPositions();
+    }
+
+    function resetPlayerPositions() {
+      p1.x = 40; p1.y = canvas.height - 150; p1.vx = 0; p1.vy = 0;
+      p2.x = 80; p2.y = canvas.height - 150; p2.vx = 0; p2.vy = 0;
+    }
+
+    function restartGame() {
+      p1.lives = 3; p1.active = true;
+      p2.lives = 3; p2.active = (gameMode === 2);
+      currentLevel = 1;
+      gameOver = false; gameWon = false; isPaused = false;
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('winScreen').style.display = 'none';
+      document.getElementById('pauseScreen').style.display = 'none';
+      buildLevel(currentLevel);
+      updateUI();
+    }
+
+    function takeDamage(p) {
+      if (!p.active) return;
+      playBeep(120, 0.2);
+      p.lives--;
+      updateUI();
+      if (p.lives <= 0) {
+        p.active = false;
+        if (gameMode === 1 || (!p1.active && !p2.active)) {
+          gameOver = true;
+          document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+      } else {
+        p.x = p.id === 1 ? 40 : 80;
+        p.y = canvas.height - 150;
+        p.vx = 0; p.vy = 0;
+      }
+    }
+
+    function updateUI() {
+      levelDisplayEl.innerText = `Nivel: ${currentLevel} / ${TOTAL_LEVELS}`;
+      p1LivesEl.innerText = gameMode === 1 ? ` Vidas: ${p1.lives}` : ` J1: ${p1.lives > 0 ? p1.lives : 'X'}`;
+      if (gameMode === 2) p2LivesEl.innerText = ` J2: ${p2.lives > 0 ? p2.lives : 'X'}`;
+    }
+
+    function updatePlayer(p, controls) {
+      if (!p.active) return;
+
+      let moveLeft = controls.left.some(k => keys[k]);
+      let moveRight = controls.right.some(k => keys[k]);
+      let jumpPressed = controls.jump.some(k => keys[k]);
+
+      if (moveLeft) p.vx = -p.speed;
+      else if (moveRight) p.vx = p.speed;
+      else p.vx *= 0.8;
+
+      if (jumpPressed && p.grounded) {
+        p.vy = p.jumpPower;
+        p.grounded = false;
+        playBeep(400, 0.08);
+      }
+
+      p.vy += p.gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+
+      p.grounded = false;
+      for (let i = 0; i < platforms.length; i++) {
+        let plat = platforms[i];
+        if (p.x + p.radius > plat.x && p.x - p.radius < plat.x + plat.w &&
+            p.y + p.radius > plat.y && p.y - p.radius < plat.y + plat.h) {
+          if (p.vy > 0 && p.y - p.vy <= plat.y + 10) {
+            p.y = plat.y - p.radius;
+            p.vy = 0;
+            p.grounded = true;
+          }
+        }
+      }
+
+      if (p.y > canvas.height + 40) takeDamage(p);
+
+      for (let i = 0; i < enemies.length; i++) {
+        let e = enemies[i];
+        let dx = p.x - e.x, dy = p.y - e.y;
+        if ((dx * dx + dy * dy) < (p.radius + e.radius) * (p.radius + e.radius)) {
+          takeDamage(p);
+        }
+      }
+
+      // Meta (Queso)
+      let gx = p.x - (goal.x + 14), gy = p.y - (goal.y + 14);
+      if ((gx * gx + gy * gy) < (p.radius + 18) * (p.radius + 18)) {
+        playBeep(600, 0.2);
+        if (currentLevel < TOTAL_LEVELS) {
+          currentLevel++;
+          if (gameMode === 2) {
+            if (!p1.active) { p1.active = true; p1.lives = 1; }
+            if (!p2.active) { p2.active = true; p2.lives = 1; }
+          }
+          updateUI();
+          buildLevel(currentLevel);
+        } else {
+          gameWon = true;
+          document.getElementById('winScreen').style.display = 'flex';
+        }
+      }
+    }
+
+    function update() {
+      if (gameOver || gameWon || isPaused || inStartMenu) return;
+
+      if (gameMode === 1) {
+        updatePlayer(p1, { left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['KeyW', 'Space', 'ArrowUp'] });
+      } else {
+        updatePlayer(p1, { left: ['KeyA'], right: ['KeyD'], jump: ['KeyW'] });
+        updatePlayer(p2, { left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['ArrowUp'] });
+      }
+
+      for (let i = 0; i < enemies.length; i++) {
+        let e = enemies[i];
+        e.x += e.vx;
+        if (e.x < e.minX || e.x > e.maxX) e.vx *= -1;
+      }
+    }
+
+    function draw() {
+      // Fondo sólido (Sin degradados pesados)
+      ctx.fillStyle = bgStyle;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Plataformas
+      ctx.fillStyle = "#2e7d32";
+      for (let i = 0; i < platforms.length; i++) {
+        let p = platforms[i];
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+      }
+
+      // Queso (Triángulo simple)
+      ctx.fillStyle = "#FFE600";
+      ctx.beginPath();
+      ctx.moveTo(goal.x, goal.y + 28);
+      ctx.lineTo(goal.x + 28, goal.y + 28);
+      ctx.lineTo(goal.x + 14, goal.y);
+      ctx.fill();
+
+      // Enemigos
+      ctx.fillStyle = "#d32f2f";
+      for (let i = 0; i < enemies.length; i++) {
+        let e = enemies[i];
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Jugadores
+      if (p1.active) {
+        ctx.fillStyle = p1.color;
+        ctx.beginPath();
+        ctx.arc(p1.x, p1.y, p1.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (gameMode === 2 && p2.active) {
+        ctx.fillStyle = p2.color;
+        ctx.beginPath();
+        ctx.arc(p2.x, p2.y, p2.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    resizeCanvas();
+    updateUI();
+    gameLoop();
+  </script>
+</body>
+</html>
