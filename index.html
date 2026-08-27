@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CHEEZE GAME</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #fff;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .ui-layer {
+      position: absolute;
+      top: 18px;
+      left: 24px;
+      right: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: bold;
+      font-size: 1.2rem;
+      text-shadow: 2px 2px 5px rgba(0,0,0,0.9);
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    .status-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.65);
+      padding: 10px 18px;
+      border-radius: 25px;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .p1-color { color: #FFE600; }
+    .p2-color { color: #00E5FF; }
+
+    .modal-screen {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.88);
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 16px;
+      z-index: 10;
+      padding: 20px;
+      text-align: center;
+    }
+
+    .btn {
+      background: #FFE600;
+      color: #000;
+      border: none;
+      padding: 16px 36px;
+      font-size: 1.25rem;
+      font-weight: bold;
+      border-radius: 10px;
+      cursor: pointer;
+      min-width: 260px;
+      transition: transform 0.1s, background 0.2s;
+      box-shadow: 0 4px 15px rgba(255, 230, 0, 0.3);
+    }
+    .btn:hover { background: #ffea38; transform: scale(1.05); }
+
+    .btn-secondary {
+      background: #333;
+      color: #fff;
+      border: 2px solid #555;
+      box-shadow: none;
+    }
+    .btn-secondary:hover { background: #444; }
+
+    .controls-hint {
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 0.85);
+      text-align: center;
+      background: rgba(0, 0, 0, 0.65);
+      padding: 8px 20px;
+      border-radius: 15px;
+      pointer-events: none;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <div class="ui-layer">
+      <div class="status-box">
+        <span class="p1-color" id="p1-lives">🟡 J1 Vidas: 3</span>
+      </div>
+      <div class="status-box">
+        <span id="level-display">Nivel: 1 / 30</span>
+      </div>
+      <div class="status-box" id="p2-status-box">
+        <span class="p2-color" id="p2-lives">🔵 J2 Vidas: 3</span>
+      </div>
+    </div>
+
+    <!-- Menú de Inicio -->
+    <div class="modal-screen" id="startMenuScreen" style="display: flex;">
+      <h1 style="color: #FFE600; font-size: 4rem; text-shadow: 4px 4px 8px #000;">🧀 CHEEZE GAME</h1>
+      <p style="color: #ccc; font-size: 1.2rem;">¡Desafío Parkour 2D!</p>
+      <button class="btn" onclick="startGame(1)">▶ 1 JUGADOR</button>
+      <button class="btn" onclick="startGame(2)" style="background: #00E5FF; box-shadow: 0 4px 15px rgba(0, 229, 255, 0.3);">👥 2 JUGADORES</button>
+      <button class="btn btn-secondary" onclick="showHowToPlay()">❓ CÓMO JUGAR</button>
+      <button class="btn btn-secondary" onclick="showOptions()">⚙️ OPCIONES</button>
+    </div>
+
+    <!-- Menú: Cómo Jugar -->
+    <div class="modal-screen" id="howToPlayScreen">
+      <h2 style="color: #FFE600; font-size: 2.8rem;">¿CÓMO JUGAR?</h2>
+      <div style="text-align: left; background: rgba(255,255,255,0.08); padding: 24px; border-radius: 12px; max-width: 620px; font-size: 1.05rem; line-height: 1.7; border: 1px solid rgba(255,255,255,0.15);">
+        <p>🎮 <b>Modo 1 Jugador:</b> Usa <b>A / D</b> o <b>Flechas</b> para moverte | <b>W / Espacio / Flecha Arriba</b> para saltar.</p>
+        <p><b class="p1-color">🟡 Jugador 1 (Modo 2P):</b> Teclas <b>A / D</b> | <b>W</b> para Saltar</p>
+        <p><b class="p2-color">🔵 Jugador 2 (Modo 2P):</b> <b>Flechas Izquierda / Derecha</b> | <b>Flecha Arriba</b> para Saltar</p>
+        <p>🔄 <b>Reiniciar:</b> Tecla <b>R</b> | ⏸️ <b>Pausa:</b> Teclas <b>Esc / P</b></p>
+        <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 15px 0;">
+        <p style="color: #FFE600;"><b>Objetivo:</b> Esquiva enemigos y alcanza el queso 🧀 al final del nivel.</p>
+      </div>
+      <button class="btn" onclick="hideHowToPlay()">Volver al Menú</button>
+    </div>
+
+    <!-- Menú: Opciones -->
+    <div class="modal-screen" id="optionsScreen">
+      <h2 style="color: #FFE600; font-size: 2.8rem;">OPCIONES</h2>
+      <div style="display: flex; flex-direction: column; gap: 15px; margin: 15px 0;">
+        <button class="btn btn-secondary" id="muteBtn" onclick="toggleMute()">🔊 Sonido: ACTIVADO</button>
+        <button class="btn btn-secondary" onclick="toggleFullscreen()">🖥️ Alternar Pantalla Completa</button>
+      </div>
+      <button class="btn" onclick="hideOptions()">Volver al Menú</button>
+    </div>
+
+    <!-- Pantalla de Game Over -->
+    <div class="modal-screen" id="gameOverScreen">
+      <h1 style="color: #ff4444; font-size: 3.5rem;">¡GAME OVER!</h1>
+      <p style="color: #ccc; font-size: 1.2rem;" id="gameOverText">Te has quedado sin vidas.</p>
+      <button class="btn" onclick="restartGame()">Reintentar Juego</button>
+    </div>
+
+    <!-- Pantalla de Victoria -->
+    <div class="modal-screen" id="winScreen">
+      <h1 style="color: #FFE600; font-size: 3.5rem;">¡VICTORIA TOTAL! 🧀</h1>
+      <p style="font-size: 1.2rem;">¡Completaste los 30 niveles!</p>
+      <button class="btn" onclick="restartGame()">Jugar de Nuevo</button>
+    </div>
+
+    <!-- Pantalla de Pausa -->
+    <div class="modal-screen" id="pauseScreen">
+      <h1 style="color: #FFE600; font-size: 3.5rem;">JUEGO EN PAUSA</h1>
+      <p style="color: #ccc; font-size: 1.2rem;">Presiona <b>Esc</b> o <b>P</b> para continuar</p>
+      <button class="btn" onclick="togglePause()">Continuar</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="controls-hint" id="controls-hint-text">
+      Controles: <b>A / D / Flechas</b> para Moverte | <b>W / Espacio / Flecha Arriba</b> para Saltar | <b>R</b> Reiniciar | <b>Esc / P</b> Pausa
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      if (!inStartMenu) buildLevel(currentLevel);
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    const TOTAL_LEVELS = 30;
+    let currentLevel = 1;
+    let gameMode = 1; // 1 Player or 2 Players
+    let inStartMenu = true;
+    let gameOver = false;
+    let gameWon = false;
+    let isPaused = false;
+    let isMuted = false;
+
+    // AUDIO
+    let audioCtx = null;
+    let musicTimer = null;
+    let musicStep = 0;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        startBackgroundMusic();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function toggleMute() {
+      isMuted = !isMuted;
+      document.getElementById('muteBtn').innerText = isMuted ? "🔇 Sonido: DESACTIVADO" : "🔊 Sonido: ACTIVADO";
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+      }
+    }
+
+    function playJumpSound() {
+      if (!audioCtx || isPaused || isMuted || inStartMenu) return;
+      let osc = audioCtx.createOscillator();
+      let gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12);
+    }
+
+    function playHitSound() {
+      if (!audioCtx || isMuted) return;
+      let osc = audioCtx.createOscillator();
+      let gain = audioCtx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+      osc.frequency.linearRampToValueAtTime(40, audioCtx.currentTime + 0.25);
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.25);
+    }
+
+    function playLevelWinSound() {
+      if (!audioCtx || isMuted) return;
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      notes.forEach((freq, i) => {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        let t = audioCtx.currentTime + i * 0.08;
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + 0.15);
+      });
+    }
+
+    function playGameOverSound() {
+      if (!audioCtx || isMuted) return;
+      const notes = [300, 250, 200, 130];
+      notes.forEach((freq, i) => {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        let t = audioCtx.currentTime + i * 0.15;
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(t);
+        osc.stop(t + 0.2);
+      });
+    }
+
+    function startBackgroundMusic() {
+      if (musicTimer) clearInterval(musicTimer);
+      const melody = [
+        261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 349.23, 440.00,
+        293.66, 349.23, 392.00, 440.00, 392.00, 349.23, 329.63, 261.63
+      ];
+      
+      musicTimer = setInterval(() => {
+        if (!audioCtx || gameOver || gameWon || isPaused || inStartMenu || isMuted) return;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = melody[musicStep % melody.length];
+        
+        let speedMult = currentLevel >= 25 ? 0.75 : (currentLevel >= 20 ? 0.85 : (currentLevel >= 10 ? 0.95 : 1.0));
+        
+        gain.gain.setValueAtTime(0.03, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.18 * speedMult);
+        
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.18 * speedMult);
+        
+        musicStep++;
+      }, 200);
+    }
+
+    // MENÚS
+    function startGame(mode) {
+      gameMode = mode;
+      initAudio();
+      toggleFullscreen();
+      inStartMenu = false;
+      document.getElementById('startMenuScreen').style.display = 'none';
+
+      const p2Box = document.getElementById('p2-status-box');
+      const hintText = document.getElementById('controls-hint-text');
+
+      if (gameMode === 1) {
+        p2Box.style.display = 'none';
+        hintText.innerHTML = 'Controles: <b>A / D / Flechas</b> para Moverte | <b>W / Espacio / Flecha Arriba</b> para Saltar | <b>R</b> Reiniciar | <b>Esc / P</b> Pausa';
+      } else {
+        p2Box.style.display = 'flex';
+        hintText.innerHTML = '<b class="p1-color">J1: A/D/W</b> | <b class="p2-color">J2: Flechas</b> | <b>R</b> Reiniciar | <b>Esc / P</b> Pausa';
+      }
+
+      restartGame();
+    }
+
+    function showHowToPlay() {
+      document.getElementById('startMenuScreen').style.display = 'none';
+      document.getElementById('howToPlayScreen').style.display = 'flex';
+    }
+
+    function hideHowToPlay() {
+      document.getElementById('howToPlayScreen').style.display = 'none';
+      document.getElementById('startMenuScreen').style.display = 'flex';
+    }
+
+    function showOptions() {
+      document.getElementById('startMenuScreen').style.display = 'none';
+      document.getElementById('optionsScreen').style.display = 'flex';
+    }
+
+    function hideOptions() {
+      document.getElementById('optionsScreen').style.display = 'none';
+      document.getElementById('startMenuScreen').style.display = 'flex';
+    }
+
+    function togglePause() {
+      if (gameOver || gameWon || inStartMenu) return;
+      isPaused = !isPaused;
+      document.getElementById('pauseScreen').style.display = isPaused ? 'flex' : 'none';
+      if (!isPaused) {
+        for (let key in keys) keys[key] = false;
+      }
+    }
+
+    // CONTROLES DE TECLADO
+    const keys = {};
+    window.addEventListener('keydown', e => {
+      initAudio();
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        togglePause();
+        return;
+      }
+      if (isPaused || inStartMenu) return;
+      keys[e.code] = true;
+      if (e.code === 'KeyR') resetLevel();
+    });
+    
+    window.addEventListener('keyup', e => {
+      keys[e.code] = false;
+    });
+
+    // JUGADORES
+    const p1 = {
+      id: 1,
+      x: 40, y: 400, radius: 18, vx: 0, vy: 0,
+      speed: 6.2, jumpPower: -13.5, gravity: 0.46, grounded: false,
+      lives: 3, color: "#FFE600", active: true
+    };
+
+    const p2 = {
+      id: 2,
+      x: 90, y: 400, radius: 18, vx: 0, vy: 0,
+      speed: 6.2, jumpPower: -13.5, gravity: 0.46, grounded: false,
+      lives: 3, color: "#00E5FF", active: true
+    };
+
+    let platforms = [];
+    let enemies = [];
+    let goal = { x: 0, y: 0, size: 30 };
+    let bushes = [];
+    let stars = [];
+
+    function buildLevel(lvl) {
+      platforms = [];
+      enemies = [];
+      bushes = [];
+      stars = [];
+
+      const w = canvas.width;
+      const h = canvas.height;
+
+      const startW = Math.max(160, w * 0.14);
+      platforms.push({ x: 0, y: h - 110, w: startW, h: 110 });
+
+      const numPlatforms = 5 + Math.floor(lvl * 0.3);
+      const targetEndX = w - Math.max(160, w * 0.14);
+      const totalDist = targetEndX - startW;
+      const stepX = totalDist / numPlatforms;
+
+      let currY = h - 110;
+      const enemySpawnChance = Math.min(0.25 + (lvl * 0.015), 0.85);
+
+      for (let i = 0; i < numPlatforms; i++) {
+        const platW = Math.max(120, Math.min(220, stepX * 0.75 - (lvl * 1.0)));
+        const posX = startW + stepX * i + (stepX - platW) / 2;
+        
+        const minY = h * 0.35;
+        const maxY = h - 110;
+        currY = Math.max(minY, Math.min(maxY, currY + (Math.sin(i * 1.2 + lvl) * (h * 0.09))));
+
+        platforms.push({ x: posX, y: currY, w: platW, h: 32 });
+
+        if (i > 0 && Math.random() < enemySpawnChance) {
+          let enemiesCount = (lvl >= 18 && platW >= 150 && Math.random() < 0.4) ? 2 : 1;
+          for (let e = 0; e < enemiesCount; e++) {
+            let offset = (platW / (enemiesCount + 1)) * (e + 1);
+            enemies.push({
+              x: posX + offset,
+              y: currY - 14,
+              radius: 14,
+              minX: posX + 16,
+              maxX: posX + platW - 16,
+              vx: (1.3 + (lvl * 0.1)) * (e % 2 === 0 ? 1 : -1)
+            });
+          }
+        }
+      }
+
+      const endPlatW = Math.max(160, w * 0.14);
+      const lastY = Math.max(h * 0.35, Math.min(h - 130, currY + 15));
+      platforms.push({ x: w - endPlatW, y: lastY, w: endPlatW, h: h - lastY });
+
+      const lastPlat = platforms[platforms.length - 1];
+      goal.x = lastPlat.x + lastPlat.w / 2 - 15;
+      goal.y = lastPlat.y - 45;
+
+      if (lvl < 10) {
+        const numBushes = Math.floor(w / 100);
+        for (let i = 0; i < numBushes; i++) {
+          bushes.push({ x: i * 100 + 30, y: h - 25, r: 28 + (i % 3) * 8 });
+        }
+      } else if (lvl >= 20) {
+        const starDensity = lvl >= 25 ? 4500 : 7000;
+        const numStars = Math.floor((w * h) / starDensity);
+        for (let i = 0; i < numStars; i++) {
+          stars.push({ x: Math.random() * w, y: Math.random() * (h * 0.75), r: Math.random() * 2.5 });
+        }
+      }
+
+      resetPlayerPositions();
+    }
+
+    function resetPlayerPositions() {
+      const h = canvas.height;
+      p1.x = 40; p1.y = h - 160; p1.vx = 0; p1.vy = 0;
+      if (gameMode === 2) {
+        p2.x = 90; p2.y = h - 160; p2.vx = 0; p2.vy = 0;
+      }
+    }
+
+    function resetLevel() {
+      resetPlayerPositions();
+    }
+
+    function restartGame() {
+      p1.lives = 3; p1.active = true;
+      p2.lives = 3; p2.active = (gameMode === 2);
+      currentLevel = 1;
+      gameOver = false;
+      gameWon = false;
+      isPaused = false;
+      document.getElementById('gameOverScreen').style.display = 'none';
+      document.getElementById('winScreen').style.display = 'none';
+      document.getElementById('pauseScreen').style.display = 'none';
+      buildLevel(currentLevel);
+      updateUI();
+    }
+
+    function takeDamage(playerObj) {
+      if (!playerObj.active) return;
+      playHitSound();
+      playerObj.lives--;
+      updateUI();
+      
+      if (playerObj.lives <= 0) {
+        playerObj.active = false;
+        const bothDead = gameMode === 2 ? (!p1.active && !p2.active) : !p1.active;
+        if (bothDead) {
+          gameOver = true;
+          playGameOverSound();
+          document.getElementById('gameOverText').innerText = gameMode === 2 ? "Ambos jugadores se han quedado sin vidas." : "Te has quedado sin vidas.";
+          document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+      } else {
+        playerObj.x = playerObj.id === 1 ? 40 : 90;
+        playerObj.y = canvas.height - 160;
+        playerObj.vx = 0;
+        playerObj.vy = 0;
+      }
+    }
+
+    function updateUI() {
+      document.getElementById('level-display').innerText = `Nivel: ${currentLevel} / ${TOTAL_LEVELS}`;
+      if (gameMode === 1) {
+        document.getElementById('p1-lives').innerText = `🟡 Vidas: ${p1.lives}`;
+      } else {
+        document.getElementById('p1-lives').innerText = `🟡 J1 Vidas: ${p1.lives > 0 ? p1.lives : 'ELIMINADO'}`;
+        document.getElementById('p2-lives').innerText = `🔵 J2 Vidas: ${p2.lives > 0 ? p2.lives : 'ELIMINADO'}`;
+      }
+    }
+
+    function updatePlayer(p, controls) {
+      if (!p.active) return;
+
+      let moveLeft = controls.left.some(k => keys[k]);
+      let moveRight = controls.right.some(k => keys[k]);
+      let jumpPressed = controls.jump.some(k => keys[k]);
+
+      if (moveLeft) p.vx = -p.speed;
+      else if (moveRight) p.vx = p.speed;
+      else p.vx *= 0.82;
+
+      if (jumpPressed && p.grounded) {
+        p.vy = p.jumpPower;
+        p.grounded = false;
+        playJumpSound();
+      }
+
+      p.vy += p.gravity;
+      p.x += p.vx;
+      p.y += p.vy;
+
+      p.grounded = false;
+      for (let plat of platforms) {
+        if (
+          p.x + p.radius > plat.x &&
+          p.x - p.radius < plat.x + plat.w &&
+          p.y + p.radius > plat.y &&
+          p.y - p.radius < plat.y + plat.h
+        ) {
+          if (p.vy > 0 && p.y - p.vy <= plat.y + 10) {
+            p.y = plat.y - p.radius;
+            p.vy = 0;
+            p.grounded = true;
+          }
+        }
+      }
+
+      if (p.y > canvas.height + 60) {
+        takeDamage(p);
+      }
+
+      for (let e of enemies) {
+        const dist = Math.hypot(p.x - e.x, p.y - e.y);
+        if (dist < p.radius + e.radius) {
+          takeDamage(p);
+        }
+      }
+
+      // Colisión con Queso
+      const distGoal = Math.hypot(p.x - (goal.x + 15), p.y - (goal.y + 15));
+      if (distGoal < p.radius + 20) {
+        playLevelWinSound();
+        if (currentLevel < TOTAL_LEVELS) {
+          currentLevel++;
+          if (gameMode === 2) {
+            if (!p1.active) { p1.active = true; p1.lives = 1; }
+            if (!p2.active) { p2.active = true; p2.lives = 1; }
+          }
+          updateUI();
+          buildLevel(currentLevel);
+        } else {
+          gameWon = true;
+          document.getElementById('winScreen').style.display = 'flex';
+        }
+      }
+    }
+
+    function update() {
+      if (gameOver || gameWon || isPaused || inStartMenu) return;
+
+      if (gameMode === 1) {
+        // En 1 Jugador se permite WASD y Flechas simultáneamente
+        updatePlayer(p1, { 
+          left: ['KeyA', 'ArrowLeft'], 
+          right: ['KeyD', 'ArrowRight'], 
+          jump: ['KeyW', 'Space', 'ArrowUp'] 
+        });
+      } else {
+        // Jugador 1 (WASD)
+        updatePlayer(p1, { left: ['KeyA'], right: ['KeyD'], jump: ['KeyW'] });
+        // Jugador 2 (Flechas)
+        updatePlayer(p2, { left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['ArrowUp'] });
+      }
+
+      // Mover Enemigos
+      for (let e of enemies) {
+        e.x += e.vx;
+        if (e.x < e.minX || e.x > e.maxX) e.vx *= -1;
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (currentLevel < 10) {
+        // DÍA
+        ctx.fillStyle = "#70c5ce";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "rgba(255,255,255,0.7)";
+        ctx.beginPath(); ctx.arc(canvas.width * 0.2, 100, 40, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(canvas.width * 0.25, 90, 55, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(canvas.width * 0.75, 120, 45, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#2e7d32";
+        for (let b of bushes) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); }
+
+      } else if (currentLevel < 20) {
+        // ATARDECER
+        let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#ff512f"); grad.addColorStop(0.55, "#dd2476"); grad.addColorStop(1, "#2c1654");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffb347";
+        ctx.beginPath(); ctx.arc(canvas.width * 0.5, canvas.height * 0.52, 75, 0, Math.PI*2); ctx.fill();
+
+      } else if (currentLevel < 25) {
+        // NOCHE
+        let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, "#0b1d3a"); grad.addColorStop(1, "#020b18");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        for (let s of stars) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill(); }
+        ctx.fillStyle = "#f1f2f6";
+        ctx.beginPath(); ctx.arc(canvas.width - 120, 90, 42, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#0b1d3a";
+        ctx.beginPath(); ctx.arc(canvas.width - 138, 82, 38, 0, Math.PI*2); ctx.fill();
+
+      } else {
+        // MEDIANOCHE
+        ctx.fillStyle = "#020208";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#ffffff";
+        for (let s of stars) { ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 1.2, 0, Math.PI*2); ctx.fill(); }
+        ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
+        ctx.beginPath(); ctx.arc(canvas.width * 0.8, 100, 60, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath(); ctx.arc(canvas.width * 0.8, 100, 42, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = "#e0e0e0";
+        ctx.beginPath(); ctx.arc(canvas.width * 0.8 - 10, 92, 9, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(canvas.width * 0.8 + 12, 110, 7, 0, Math.PI*2); ctx.fill();
+      }
+
+      // Plataformas
+      for (let p of platforms) {
+        if (currentLevel < 10) ctx.fillStyle = "#4caf50";
+        else if (currentLevel < 20) ctx.fillStyle = "#8e44ad";
+        else if (currentLevel < 25) ctx.fillStyle = "#1f3a60";
+        else ctx.fillStyle = "#121a24";
+
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = currentLevel >= 25 ? "#3a4b60" : "#000";
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+      }
+
+      // Queso
+      ctx.fillStyle = "#FFE600";
+      ctx.beginPath();
+      ctx.moveTo(goal.x, goal.y + 30);
+      ctx.lineTo(goal.x + 30, goal.y + 30);
+      ctx.lineTo(goal.x + 15, goal.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "#000"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = "#d4b800";
+      ctx.beginPath(); ctx.arc(goal.x + 13, goal.y + 22, 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(goal.x + 20, goal.y + 24, 2.5, 0, Math.PI*2); ctx.fill();
+
+      // Enemigos
+      for (let e of enemies) drawEnemy(e);
+
+      // Jugadores
+      if (p1.active) drawPlayer(p1);
+      if (gameMode === 2 && p2.active) drawPlayer(p2);
+    }
+
+    function drawEnemy(e) {
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      ctx.beginPath();
+      ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#800014";
+      ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = "#000"; ctx.stroke();
+      ctx.fillStyle = "#000"; ctx.strokeStyle = "#000"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-8, -9); ctx.lineTo(-2, -5); ctx.stroke();
+      ctx.beginPath(); ctx.arc(-8, -3, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-2, -3, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-10, 2); ctx.lineTo(-2, 6); ctx.lineTo(-10, 10); ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPlayer(p) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+
+      if (p.lives === 3) ctx.fillStyle = p.color;
+      else if (p.lives === 2) ctx.fillStyle = p.id === 1 ? "#FF9900" : "#00B0FF";
+      else if (p.lives === 1) ctx.fillStyle = "#FF2222";
+      else ctx.fillStyle = "#888888";
+
+      ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = "#000"; ctx.stroke();
+      ctx.fillStyle = "#000"; ctx.strokeStyle = "#000"; ctx.lineWidth = 3;
+
+      if (p.lives === 3) {
+        ctx.beginPath(); ctx.arc(-6, -4, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(6, -4, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-6, 3); ctx.lineTo(6, 3); ctx.lineTo(0, 12); ctx.closePath(); ctx.fill();
+      } else if (p.lives === 2) {
+        ctx.beginPath(); ctx.arc(-6, -4, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(6, -2, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-7, 7); ctx.lineTo(7, 3); ctx.lineCap = "round"; ctx.stroke();
+      } else if (p.lives === 1) {
+        ctx.beginPath(); ctx.arc(-6, -4, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(6, -4, 3.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(0, 2); ctx.lineTo(-5, 9); ctx.lineTo(4, 9); ctx.closePath(); ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    resizeCanvas();
+    updateUI();
+    gameLoop();
+  </script>
+</body>
+</html>
